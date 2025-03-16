@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "discohook"
+version = "1.0.0"
+authors = [
+    { name = "Aaron", email = "mildthrone@proton.me" },
+    { name = "JanakXD", email = "janak@panarastudios.in" }
+]
+description = "A basic Library to send Discord Webhook"
+readme = "README.md"
+requires-python = ">=3.6"  # Or your minimum Python version
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "requests",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/MildThrone/discohook"
+"Bug Tracker" = "https://github.com/MildThrone/discohook/issues"
