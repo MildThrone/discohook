@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["Discohook", "DiscohookEmbed"]
 
+hello world
 
 class Discohook:
     """
