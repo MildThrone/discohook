@@ -154,7 +154,7 @@ class Discohook:
             async with session.post(
                     url,
                     json=self.json,
-                    params={'wait': True},
+                    params={'wait': 'true'},
                     timeout=aiohttp.ClientTimeout(total=self.timeout)
             ) as response:
                 response_data = await response.read()
