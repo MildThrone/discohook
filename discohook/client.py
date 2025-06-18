@@ -3,7 +3,8 @@ import json
 import time
 import datetime
 import requests
-
+import aiohttp
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,7 @@ class Discohook:
         Adds a file to the webhook
         - param file : `file content`
         - param filename : `filename`
-        - return : 
+        - return :
         """
         self.files["_{}".format(filename)] = (filename, file)
 
@@ -145,6 +146,48 @@ class Discohook:
 
         return response
 
+    async def api_post_request_async(self, session, url):
+        """
+        Async version of api_post_request using aiohttp
+        """
+        if bool(self.files) is False:
+            async with session.post(
+                    url,
+                    json=self.json,
+                    params={'wait': True},
+                    timeout=aiohttp.ClientTimeout(total=self.timeout)
+            ) as response:
+                response_data = await response.read()
+                # Create a mock response object similar to requests.Response
+                mock_response = type('MockResponse', (), {
+                    'status_code': response.status,
+                    'content': response_data,
+                    'url': str(response.url)
+                })()
+                return mock_response
+        else:
+            # Prepare form data for file upload
+            data = aiohttp.FormData()
+            data.add_field('payload_json', json.dumps(self.json))
+
+            for key, (filename, file_content) in self.files.items():
+                if key != 'payload_json':
+                    data.add_field(key.lstrip('_'), file_content, filename=filename)
+
+            async with session.post(
+                    url,
+                    data=data,
+                    timeout=aiohttp.ClientTimeout(total=self.timeout)
+            ) as response:
+                response_data = await response.read()
+                # Create a mock response object similar to requests.Response
+                mock_response = type('MockResponse', (), {
+                    'status_code': response.status,
+                    'content': response_data,
+                    'url': str(response.url)
+                })()
+                return mock_response
+
     def execute(self, remove_embeds=False, remove_files=False):
         """
         Executes the Webhook
@@ -160,7 +203,7 @@ class Discohook:
             if response.status_code in [200, 204]:
                 logger.debug(
                     "[{index}/{length}] Webhook executed".format(
-                        index=i+1, length=urls_len
+                        index=i + 1, length=urls_len
                     )
                 )
             elif response.status_code == 429 and self.rate_limit_retry:
@@ -186,13 +229,78 @@ class Discohook:
             else:
                 logger.error(
                     "[{index}/{length}] Webhook status code {status_code}: {content}".format(
-                        index=i+1,
+                        index=i + 1,
                         length=urls_len,
                         status_code=response.status_code,
                         content=response.content.decode("utf-8"),
                     )
                 )
             responses.append(response)
+        if remove_embeds:
+            self.remove_embeds()
+        if remove_files:
+            self.remove_files()
+        return responses[0] if len(responses) == 1 else responses
+
+    async def aexecute(self, remove_embeds=False, remove_files=False):
+        """
+        Async version of execute using aiohttp
+        - param remove_embeds : if set to True, calls `self.remove_embeds()` to empty `self.embeds` after webhook is executed
+        - param remove_files : if set to True, calls `self.remove_files()` to empty `self.files` after webhook is executed
+        - return : Webhook response
+        """
+        webhook_urls = self.url if isinstance(self.url, list) else [self.url]
+        urls_len = len(webhook_urls)
+        responses = []
+
+        # Create connector with proxy support if needed
+        connector = None
+        if self.proxies:
+            connector = aiohttp.TCPConnector()
+
+        async with aiohttp.ClientSession(
+                connector=connector,
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+        ) as session:
+            for i, url in enumerate(webhook_urls):
+                response = await self.api_post_request_async(session, url)
+
+                if response.status_code in [200, 204]:
+                    logger.debug(
+                        "[{index}/{length}] Webhook executed".format(
+                            index=i + 1, length=urls_len
+                        )
+                    )
+                elif response.status_code == 429 and self.rate_limit_retry:
+                    while response.status_code == 429:
+                        errors = json.loads(response.content.decode('utf-8'))
+                        wh_sleep = (int(errors['retry_after']) / 1000) + 0.15
+                        await asyncio.sleep(wh_sleep)
+                        logger.error(
+                            "Webhook rate limited: sleeping for {wh_sleep} "
+                            "seconds...".format(
+                                wh_sleep=wh_sleep
+                            )
+                        )
+                        response = await self.api_post_request_async(session, url)
+                        if response.status_code in [200, 204]:
+                            logger.debug(
+                                "[{index}/{length}] Webhook executed".format(
+                                    index=i + 1, length=urls_len
+                                )
+                            )
+                            break
+                else:
+                    logger.error(
+                        "[{index}/{length}] Webhook status code {status_code}: {content}".format(
+                            index=i + 1,
+                            length=urls_len,
+                            status_code=response.status_code,
+                            content=response.content.decode("utf-8"),
+                        )
+                    )
+                responses.append(response)
+
         if remove_embeds:
             self.remove_embeds()
         if remove_files:
@@ -212,10 +320,12 @@ class Discohook:
             url = webhook.url.split('?')[0]  # removes any query params
             previous_sent_message_id = json.loads(webhook.content.decode('utf-8'))['id']
             if bool(self.files) is False:
-                response = requests.patch(url+'/messages/'+str(previous_sent_message_id), json=self.json, proxies=self.proxies, params={'wait': True}, timeout=self.timeout)
+                response = requests.patch(url + '/messages/' + str(previous_sent_message_id), json=self.json,
+                                          proxies=self.proxies, params={'wait': True}, timeout=self.timeout)
             else:
                 self.files["payload_json"] = (None, json.dumps(self.json))
-                response = requests.patch(url+'/messages/'+str(previous_sent_message_id), files=self.files, proxies=self.proxies, timeout=self.timeout)
+                response = requests.patch(url + '/messages/' + str(previous_sent_message_id), files=self.files,
+                                          proxies=self.proxies, timeout=self.timeout)
             if response.status_code in [200, 204]:
                 logger.debug(
                     "[{index}/{length}] Webhook edited".format(
@@ -247,7 +357,8 @@ class Discohook:
         for i, webhook in enumerate(sent_webhook):
             url = webhook.url.split('?')[0]  # removes any query params
             previous_sent_message_id = json.loads(webhook.content.decode('utf-8'))['id']
-            response = requests.delete(url+'/messages/'+str(previous_sent_message_id), proxies=self.proxies, timeout=self.timeout)
+            response = requests.delete(url + '/messages/' + str(previous_sent_message_id), proxies=self.proxies,
+                                       timeout=self.timeout)
             if response.status_code in [200, 204]:
                 logger.debug(
                     "[{index}/{length}] Webhook deleted".format(
@@ -284,7 +395,7 @@ class DiscohookEmbed:
         - keyword hex_color : color code of the embed as a hex string
         - keyword footer : footer information
         - keyword image : image information
-        - keyword thumbnail : thumbnail information
+        - thumbnail : thumbnail information
         - keyword video : video information
         - keyword provider : provider information
         - keyword author : author information

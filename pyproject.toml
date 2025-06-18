@@ -4,14 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "discohook"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
     { name = "Aaron", email = "mildthrone@proton.me" },
     { name = "JanakXD", email = "janak@panarastudios.in" }
 ]
 description = "A basic Library to send Discord Webhook"
 readme = "README.md"
-requires-python = ">=3.6"  # Or your minimum Python version
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -19,6 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "requests",
+    "aiohttp (>=3.12.13,<4.0.0)",
 ]
 
 [project.urls]
